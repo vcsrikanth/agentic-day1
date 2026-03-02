@@ -1,29 +1,48 @@
-import os
-import sys
 from dotenv import load_dotenv
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 
 load_dotenv()
 
-if not os.getenv("OPENAI_API_KEY"):
-    print("Error: OPENAI_API_KEY is not set. Add it to your .env file.", file=sys.stderr)
-    sys.exit(1)
-
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
-if __name__ == "__main__":
+def test_context_break_demo():
+    """Demonstrates context break: string-based vs message-based invocation.
+
+    When system instructions are flattened into a single string with user messages,
+    the model cannot distinguish roles. Critical instructions (e.g., output format)
+    get lost. Message-based invocation preserves structure so the API applies
+    system instructions correctly.
+    """
+    system = (
+        "You are a senior AI architect. CRITICAL: You must respond with ONLY "
+        "the word 'RISKS:' followed by a comma-separated list of exactly 3 risks, nothing else."
+    )
+    user1 = "We are building an AI system for processing medical insurance claims."
+    user2 = "What are the main risks in this system?"
+
+    # BAD: Flattened string - context breaks, system instruction often ignored
+    flattened = f"{system}\n\n{user1}\n\n{user2}"
+    bad_response = llm.invoke(flattened)
+    print("=== STRING-BASED (context break) ===")
+    print("Input: single flattened string, no role/turn structure")
+    print("Response:", bad_response.content[:400])
+    print()
+
+    # GOOD: Message-based - preserves role and turn order, system instruction applied
     messages = [
-        SystemMessage(content="You are a senior AI architect reviewing production systems."),
-        HumanMessage(content="We are building an AI system for processing medical insurance claims."),
-        HumanMessage(content="What are the main risks in this system?"),
+        SystemMessage(content=system),
+        HumanMessage(content=user1),
+        HumanMessage(content=user2),
     ]
-    try:
-        response = llm.invoke(messages)
-        print("Response:", response.content)
-    except Exception as e:
-        print(f"Error invoking LLM: {e}", file=sys.stderr)
-        sys.exit(1)
+    good_response = llm.invoke(messages)
+    print("=== MESSAGE-BASED (correct context) ===")
+    print("Input: SystemMessage + HumanMessage(s) with proper structure")
+    print("Response:", good_response.content[:400])
+
+
+if __name__ == "__main__":
+    test_context_break_demo()
 
 """
 Reflection:
